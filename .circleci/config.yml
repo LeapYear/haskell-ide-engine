@@ -42,8 +42,8 @@ defaults: &defaults
         command: stack -j 2 --stack-yaml=${STACK_FILE} setup
 
     - run:
-        name: Install happy
-        command: stack --stack-yaml=${STACK_FILE} install happy
+        name: Install other tools
+        command: stack --stack-yaml=${STACK_FILE} install happy brittany alex
 
     - run:
         name: Install Hoogle
@@ -51,14 +51,16 @@ defaults: &defaults
 
     - run:
         name: Build (we need the exe for tests)
-        command: stack -j 1 --stack-yaml=${STACK_FILE} install
-                       # need j1, else ghc-lib-parser triggers OOM
+        command: |
+          stack --stack-yaml=${STACK_FILE} build ghc-lib-parser --only-dependencies
+          stack -j 1 --stack-yaml=${STACK_FILE} build ghc-lib-parser
+          stack --stack-yaml=${STACK_FILE} install
         no_output_timeout: 30m
 
-    - run:
-        name: Build Testsuite without running it
-        command: stack -j 2 --stack-yaml=${STACK_FILE}  build --test --no-run-tests
-        no_output_timeout: 30m
+    # - run:
+    #     name: Build Testsuite without running it
+    #     command: stack -j 2 --stack-yaml=${STACK_FILE}  build --test --no-run-tests
+    #     no_output_timeout: 30m
 
     - store_artifacts:
         path: ~/.local/bin
@@ -67,6 +69,21 @@ defaults: &defaults
     - run:
         name: Generate Hoogle database
         command: if [ ! -d ~/.hoogle ]; then stack --stack-yaml=${STACK_FILE} exec hoogle generate; fi
+
+    - store_artifacts:
+        path: ~/.hoogle
+        destination: hoogle
+
+    - run:
+        name: package up artifacts
+        command: |
+          mkdir /tmp/artifacts
+          tar zcvf /tmp/artifacts/bin.tar.gz -C ~/.local/bin ./
+          tar zcvf /tmp/artifacts/hoogle.tar.gz -C ~/.hoogle ./
+
+    - store_artifacts:
+        path: /tmp/artifacts
+        destination: artifacts
 
     - run:
         name: Clear cabal-helper cache
@@ -86,17 +103,17 @@ defaults: &defaults
           - ~/build/submodules/ghc-mod/.stack-work
           - ~/build/submodules/cabal-helper/.stack-work
 
-    - run:
-        name: Test
-        # Tests MUST run with -j1, since multiple ghc-mod sessions are not allowed
-        command: stack -j 1 --stack-yaml=${STACK_FILE} test --dump-logs
-        no_output_timeout: 120m
+    # - run:
+    #     name: Test
+    #     # Tests MUST run with -j1, since multiple ghc-mod sessions are not allowed
+    #     command: stack -j 1 --stack-yaml=${STACK_FILE} test --dump-logs
+    #     no_output_timeout: 120m
 
-    - store_test_results:
-        path: test-results
+    # - store_test_results:
+    #     path: test-results
 
-    - store_artifacts:
-        path: test-logs
+    # - store_artifacts:
+    #     path: test-logs
 
     - save_cache:
         key: stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}
