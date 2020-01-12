@@ -1,13 +1,20 @@
 defaults: &defaults
   working_directory: ~/build
   docker:
-    - image: alanz/haskell-hie-ci
+    - image: centos:7
   steps:
     - checkout
+    - run: yum update -y && yum install -y git
     - run:
         command: git submodule sync --recursive
     - run:
         command: git submodule update --recursive --init
+    - run:
+        name: Install stack
+        command: curl -sSL https://get.haskellstack.org/ | sh
+    - run:
+        name: Install system dependencies
+        command: yum install -y zlib-devel ncurses-devel
     - run:
         name: Write provided stack.yaml with predictable name
         command: cp ${STACK_FILE} stack-build.txt
@@ -101,96 +108,7 @@ defaults: &defaults
 
 version: 2
 jobs:
-  ghc-8.4.2:
-    environment:
-      - STACK_FILE: "stack-8.4.2.yaml"
-    <<: *defaults
-
-  ghc-8.4.3:
-    environment:
-      - STACK_FILE: "stack-8.4.3.yaml"
-    <<: *defaults
-
-  ghc-8.4.4:
-    environment:
-      - STACK_FILE: "stack-8.4.4.yaml"
-    <<: *defaults
-
-  ghc-8.6.1:
-    environment:
-      - STACK_FILE: "stack-8.6.1.yaml"
-    <<: *defaults
-
-  ghc-8.6.2:
-    environment:
-      - STACK_FILE: "stack-8.6.2.yaml"
-    <<: *defaults
-
-  ghc-8.6.3:
-    environment:
-      - STACK_FILE: "stack-8.6.3.yaml"
-    <<: *defaults
-
-  ghc-8.6.4:
-    environment:
-      - STACK_FILE: "stack-8.6.4.yaml"
-    <<: *defaults
-
-  ghc-8.6.5:
+  build:
     environment:
       - STACK_FILE: "stack-8.6.5.yaml"
     <<: *defaults
-
-  ghc-nightly:
-    environment:
-      - STACK_FILE: "stack.yaml"
-    <<: *defaults
-
-  cabal:
-    working_directory: ~/build
-    docker:
-      - image: quay.io/haskell_works/ghc-8.6.5
-    steps:
-      - checkout
-      - run:
-          name: Sync submodules
-          command: git submodule sync --recursive
-      - run:
-          name: Update submodules
-          command: git submodule update --recursive --init
-      - restore-cache:
-          keys:
-            - cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-      - run:
-          name: Cabal version
-          command: cabal --version
-      - run:
-          name: Update
-          command: cabal new-update
-      - run:
-          name: Configure
-          command: cabal new-configure --enable-tests
-      - run:
-          name: Build
-          command: cabal new-build -j1 # need j1, else ghc-lib-parser triggers OOM
-          no_output_timeout: 30m
-      - save_cache:
-          key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-          paths:
-            - ~/.cabal
-
-
-workflows:
-  version: 2
-  multiple-ghcs:
-    jobs:
-      - ghc-8.4.2
-      - ghc-8.4.3
-      - ghc-8.4.4
-      - ghc-8.6.1
-      - ghc-8.6.2
-      # - ghc-8.6.3
-      - ghc-8.6.4
-      - ghc-8.6.5
-      - ghc-nightly
-      - cabal
